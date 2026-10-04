@@ -1,0 +1,56 @@
+[project]
+name = "pyqueue"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "redis>=8.1.0",
+]
+
+[project.scripts]
+pyqueue = "pyqueue:main"
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "ruff>=0.16.10",
+    "ty>=0.0.84",
+]
+
+# ==============================================================================
+# Ruff Configuration (Linting & Formatting)
+# ==============================================================================
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+# Select specific rule categories:
+# E/W = pycodestyle (standard PEP8 syntax & style)
+# F   = Pyflakes (catches undefined variables, unused imports)
+# I   = isort (alphabetizes and organizes imports)
+# B   = flake8-bugbear (catches common subtle concurrency & logic bugs)
+# UP  = pyupgrade (keeps syntax modern Python 3.12+)
+# ASYNC = flake8-async (catches common asyncio deadlocks & mistakes)
+select = ["E", "W", "F", "I", "B", "UP", "ASYNC"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ==============================================================================
+# ty Configuration (Astral Type Checker)
+# ==============================================================================
+[tool.ty.environment]
+# Informs ty of your target runtime environment
+python-version = "3.12"
+
+[tool.ty.rules]
+# Treat critical type failures as hard errors
+unresolved-import = "error"
+division-by-zero = "error"
+possibly-unresolved-reference = "warn"
