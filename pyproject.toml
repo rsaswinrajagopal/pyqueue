@@ -1,10 +1,11 @@
 [project]
 name = "pyqueue"
 version = "0.1.0"
-description = "Add your description here"
+description = "Project description"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
+    "msgpack>=1.2.3",
     "redis>=8.1.0",
 ]
 
@@ -17,6 +18,7 @@ build-backend = "uv_build"
 
 [dependency-groups]
 dev = [
+    "pytest>=9.1.1",
     "ruff>=0.16.10",
     "ty>=0.0.84",
 ]
@@ -26,7 +28,7 @@ dev = [
 # ==============================================================================
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py314"
 
 [tool.ruff.lint]
 # Select specific rule categories:
@@ -45,12 +47,17 @@ indent-style = "space"
 # ==============================================================================
 # ty Configuration (Astral Type Checker)
 # ==============================================================================
+
 [tool.ty.environment]
 # Informs ty of your target runtime environment
-python-version = "3.12"
+python-version = "3.14"
 
 [tool.ty.rules]
 # Treat critical type failures as hard errors
 unresolved-import = "error"
 division-by-zero = "error"
 possibly-unresolved-reference = "warn"
+
+[tool.pytest]
+testpaths = ["tests"]
+pythonpath = ["src"]
