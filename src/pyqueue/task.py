@@ -1,47 +1,32 @@
-import time
-from dataclasses import dataclass, field
-from uuid import UUID, uuid7
+import importlib
+import logging
+import os
 
-import msgpack
+from pyqueue.broker import default_broker
+from pyqueue.message import TaskMessage
 
 # _REGISTRY: dict[str, str] = {}
 REGISTRY = {}
+REDIS = default_broker
+TASKS_ENV = "PYQUEUE_TASKS"
 
 
-@dataclass
-class TaskMessage:
-    task_name: str
-    retries: int = 0
-    max_retries: int = 3
-    created_at: float = field(default_factory=time.time)
-    task_id: UUID = field(default_factory=uuid7)
-    args: list = field(default_factory=list)
-    kwargs: dict = field(default_factory=dict)
+def load_task_modules(paths: list[str]) -> None:
+    """Import task modules so their @task functions land in REGISTRY."""
+    for path in paths:
+        name = path.strip()
+        if not name:
+            continue
+        try:
+            importlib.import_module(name)
+        except ImportError as exc:
+            logging.error(f"Could not import task module {name!r}: {exc}")
+            raise
 
-    def to_bytes(self) -> bytes:
-        data = {
-            "task_name": self.task_name,
-            "retries": self.retries,
-            "max_retries": self.max_retries,
-            "created_at": self.created_at,
-            "task_id": str(self.task_id),
-            "args": self.args,
-            "kwargs": self.kwargs,
-        }
-        return msgpack.packb(data)
 
-    @classmethod
-    def from_bytes(cls, data: bytes):
-        unpacked_data = msgpack.unpackb(data, raw=False)
-        return cls(
-            task_name=unpacked_data["task_name"],
-            retries=unpacked_data["retries"],
-            max_retries=unpacked_data["max_retries"],
-            created_at=unpacked_data["created_at"],
-            task_id=UUID(unpacked_data["task_id"]),
-            args=unpacked_data["args"],
-            kwargs=unpacked_data["kwargs"],
-        )
+def task_modules_from_env() -> list[str]:
+    raw = os.environ.get(TASKS_ENV, "")
+    return [name.strip() for name in raw.split(",") if name.strip()]
 
 
 def task(func):
@@ -51,7 +36,8 @@ def task(func):
             args=list(args),
             kwargs=dict(kwargs),
         )
-        return task_message
+        REDIS.enqueue(task_message)
+        return task_message.task_id
 
     func.delay = delay
     REGISTRY[f"{func.__module__}.{func.__name__}"] = func
