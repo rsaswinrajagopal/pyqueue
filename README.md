@@ -259,9 +259,9 @@ tests/
 ├── test_task.py
 └── test_chaos.py
 
-docs/
-├── PyQueue-Architecture.md
-└── PyQueue-Architecture-Simplified.md
+benchmarks/
+├── benchmark_load.py
+
 ```
 
 ---

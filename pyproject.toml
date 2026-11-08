@@ -1,19 +1,27 @@
 [project]
 name = "pyqueue"
 version = "0.1.0"
-description = "Project description"
+description = "Fault-tolerant background task execution engine for Python, backed by Redis"
+authors = [
+    { name = "Aswin Rajagopal", email = "rsaswinrajagopal@gmail.com" }
+]
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.14"
 dependencies = [
     "msgpack>=1.2.3",
     "redis>=8.1.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/rsaswinrajagopal/pyqueue"
+
 [project.scripts]
 pyqueue = "pyqueue.cli:main"
 
 [build-system]
-requires = ["uv_build>=0.12.23,<0.13.0"]
+requires = ["uv_build>=0.12.23"]
 build-backend = "uv_build"
 
 [dependency-groups]

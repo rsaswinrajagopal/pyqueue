@@ -1,6 +1,8 @@
-REDIS_HOST = "localhost"
-REDIS_PORT = 6379
-REDIS_DB = 0
+import os
+
+REDIS_HOST = os.environ.get("PYQUEUE_REDIS_HOST", "localhost")
+REDIS_PORT = int(os.environ.get("PYQUEUE_REDIS_PORT", "6379"))
+REDIS_DB = int(os.environ.get("PYQUEUE_REDIS_DB", "0"))
 
 DEFAULT_WORKER_COUNT = 1
 
