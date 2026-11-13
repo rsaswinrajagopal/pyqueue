@@ -39,6 +39,7 @@ Typical workloads include email and notifications, report generation, webhook de
 | **Heartbeat** | 5 s refresh; 10 s TTL |
 | **Recovery sweep** | Every 12 s |
 | **Graceful shutdown** | 5 s total drain window |
+| **Measured load** | ≈1,485 tasks/s end to end (10,000 tasks, 4 workers) |
 
 ---
 
@@ -237,6 +238,69 @@ The chaos test starts a real worker process, enqueues a long-running task, kills
 
 ---
 
+## Benchmarks
+
+[`benchmarks/benchmark_load.py`](benchmarks/benchmark_load.py) is a throughput harness. It starts a pool of worker processes, floods the pending queue with no-op tasks, and measures how long the pool needs to drain the backlog.
+
+### How the load is generated
+
+1. **Clean slate.** Deletes `queue:pending` and every `queue:processing:*` list so leftover work from earlier runs is not counted.
+2. **Worker pool.** Starts `--concurrency` processes that call `pyqueue.worker.worker` directly, each named `Bench-<n>` and importing `pyqueue.demo`. It then waits up to 10 seconds until at least `--concurrency` `worker:*` heartbeat keys exist, exiting with `workers did not come online` if they never appear.
+3. **Payloads.** Pre-serializes `--count` `TaskMessage` envelopes for `pyqueue.demo.add(i, i)` into MessagePack bytes — the same wire format `.delay()` produces. Serialization happens before the timer starts, so it is not part of the enqueue figure.
+4. **Enqueue burst.** Pushes every payload with a non-transactional Redis pipeline, executing once every 500 `LPUSH` commands, and records the enqueue duration and rate.
+5. **Drain.** Polls `LLEN queue:pending` plus the length of every processing list every 50 ms until both are empty, bounded by `--timeout`.
+6. **Shutdown and report.** Sets the shared shutdown event, joins each worker (terminating stragglers after 5 seconds), and prints the counters.
+
+Only raw workers are started — no master and no scavenger — so the run exercises enqueue, `BLMOVE` claim, execution, and acknowledgement, but not retries or crash recovery. Because the `add` handler is trivial and the payload is tiny, the result isolates broker and worker protocol overhead rather than application work.
+
+### Running it
+
+Redis 8.x must be reachable through the usual config variables: `PYQUEUE_REDIS_HOST`, `PYQUEUE_REDIS_PORT`, and `PYQUEUE_REDIS_DB`.
+
+```bash
+# Default: 10,000 tasks across 4 workers
+uv run python benchmarks/benchmark_load.py
+
+# Heavier load
+uv run python benchmarks/benchmark_load.py --count 50000 --concurrency 8
+
+# Give a large backlog more time to drain
+uv run python benchmarks/benchmark_load.py -n 100000 -c 8 --timeout 300
+```
+
+| Option | Default | Description |
+|---|---|---|
+| `-n`, `--count` | `10000` | Number of `pyqueue.demo.add` tasks to enqueue |
+| `-c`, `--concurrency` | `4` | Worker processes started for the run |
+| `--timeout` | `120.0` | Seconds allowed for the queue to drain; exceeding it exits with `drain timed out` |
+
+The harness prints a four-line summary:
+
+```text
+tasks        : 10000
+workers      : 4
+enqueue      : <seconds>s (<tasks>/s)
+end to end   : <seconds>s (<tasks>/s)
+```
+
+- **enqueue** is the pipelined `LPUSH` burst alone.
+- **end to end** starts at the same instant and includes the enqueue burst plus waiting for every task to be claimed, executed, and acknowledged, so compare this figure across runs.
+
+### Measured results
+
+| Metric | Result |
+|---|---|
+| Tasks | 10,000 `pyqueue.demo.add` calls |
+| Worker processes | 4 |
+| End-to-end throughput | **≈1,485 tasks/s** |
+| Derived drain time | ≈6.7 s |
+
+The project plan targets **> 2,000 tasks/s with 4 workers**, so this run lands at roughly 74% of the target — useful headroom for tuning worker count, keeping Redis on the same host, or raising the harness's 500-command pipeline batch.
+
+> **Destructive by design.** The harness deletes `queue:pending` and all `queue:processing:*` keys. Never point it at a shared or production Redis; set `PYQUEUE_REDIS_DB` to a scratch database when the instance is shared.
+
+---
+
 ## Project Layout
 
 ```text
@@ -256,12 +320,11 @@ src/pyqueue/
 └── log.py          Process-aware logging
 
 tests/
-├── test_task.py
-└── test_chaos.py
+├── test_task.py    Message envelope defaults, MessagePack round-trip, task registration
+└── test_chaos.py   Kill a worker mid-task and verify scavenger recovery 
 
 benchmarks/
-├── benchmark_load.py
-
+└── benchmark_load.py   Throughput harness: pipelined enqueue + drain timing
 ```
 
 ---
@@ -279,4 +342,4 @@ benchmarks/
 
 ## Extending PyQueue
 
-The core engine focuses on execution: enqueue, dispatch, recovery, retries, and dead-lettering. Result storage, task-status APIs, queue routing, priorities, and operational dashboards can be layered on without changing the core execution path.
+The core engine focuses on execution: enqueue, dispatch, recovery, retries, and dead-lettering. Result storage, task-status APIs, queue routing, priorities, and operational dashboards can be layered on without changing the core execution path. (PyHook Currently in Work)
